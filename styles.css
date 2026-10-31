@@ -20,6 +20,14 @@
   --border: #E0E0D5;
   --border-strong: #D0D0C0;
 
+  /* Heat map — single yellow accent scale */
+  --heat-0: #F0F0E6;
+  --heat-1: #FFFBE6;
+  --heat-2: #FFF3B0;
+  --heat-3: #FFE066;
+  --heat-4: #F2C230;
+  --heat-5: #C99A00;
+
   /* Typography */
   --font-display: 'Syne', system-ui, sans-serif;
   --font-ui: 'DM Sans', system-ui, sans-serif;
@@ -88,6 +96,12 @@
     --blue-link-hover: #93C5FD;
     --border: #3A3A50;
     --border-strong: #4A4A60;
+    --heat-0: #2A2A44;
+    --heat-1: #3D3510;
+    --heat-2: #5A4A10;
+    --heat-3: #7A6414;
+    --heat-4: #A8861A;
+    --heat-5: #D4AF37;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
     --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.25);
     --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.3);
@@ -373,6 +387,245 @@ body {
 }
 
 /* ==========================================================================
+   Heat Map — Constancia
+   ========================================================================== */
+
+.heatmap-section {
+  background: var(--paper-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin-bottom: var(--space-6);
+  min-width: 0;
+}
+
+.heatmap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.heatmap-header h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.heatmap-ranges {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.heatmap-range-btn {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-mid);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.heatmap-range-btn:hover {
+  background: var(--paper-hover);
+  color: var(--ink);
+}
+
+.heatmap-range-btn.is-active {
+  background: var(--highlight-strong);
+  color: var(--highlight-ink);
+}
+
+.heatmap-range-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.heatmap-body {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.heatmap-weekdays {
+  display: grid;
+  grid-template-rows: repeat(7, 10px);
+  row-gap: 2px;
+  padding-top: 2px;
+  width: 24px;
+  flex: 0 0 24px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 10px;
+  color: var(--ink-light);
+  text-align: right;
+  user-select: none;
+}
+
+.heatmap-scroll {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: var(--space-1);
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.heatmap-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+  table-layout: fixed;
+  width: max-content;
+}
+
+.heatmap-cell {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  padding: 0;
+  border-radius: 2px;
+  background: var(--heat-0);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.heatmap-cell.is-padding {
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+.heatmap-cell[data-date]:hover {
+  box-shadow: 0 0 0 1px var(--ink);
+}
+
+.heatmap-cell[data-date]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.heatmap-cell.is-today {
+  box-shadow: inset 0 0 0 1px var(--ink-light);
+}
+
+.heatmap-cell.is-selected {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.heat-level-0 { background: var(--heat-0); }
+.heat-level-1 { background: var(--heat-1); }
+.heat-level-2 { background: var(--heat-2); }
+.heat-level-3 { background: var(--heat-3); }
+.heat-level-4 { background: var(--heat-4); }
+.heat-level-5 { background: var(--heat-5); }
+
+.heatmap-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-light);
+}
+
+.heatmap-legend-label {
+  margin: 0 var(--space-1);
+}
+
+.heatmap-tooltip {
+  position: fixed;
+  z-index: 50;
+  max-width: 260px;
+  padding: var(--space-1) var(--space-2);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.heatmap-tooltip[hidden] {
+  display: none;
+}
+
+.sessions-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.btn-clear-filter {
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--highlight-ink);
+  background: var(--highlight);
+  border: 1px solid var(--highlight-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.btn-clear-filter:hover {
+  background: var(--highlight-strong);
+}
+
+.btn-clear-filter:focus {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.btn-clear-filter[hidden] {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .heatmap-section { padding: var(--space-4); }
+  .heatmap-header { align-items: flex-start; }
+  .heatmap-ranges { width: 100%; }
+  .heatmap-range-btn { flex: 1 1 auto; }
+  .heatmap-weekdays {
+    width: 20px;
+    flex-basis: 20px;
+    font-size: 8px;
+  }
+}
+
+/* ==========================================================================
    Sections — Form & Sessions
    ========================================================================== */
 
@@ -473,7 +726,7 @@ body {
   font-family: var(--font-ui);
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--highlight-ink);
+  color: var(--paper);
   background: var(--ink);
   border: none;
   border-radius: var(--radius-md);
@@ -521,6 +774,12 @@ body {
   border-radius: var(--radius-md);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
   animation: sessionSlideIn 250ms ease-out backwards;
+}
+
+.session-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 @keyframes sessionSlideIn {

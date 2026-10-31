@@ -1,7 +1,7 @@
 # Plan técnico — Mapa de Calor (001-heat-map)
 
 **Base:** `docs/constitution.md` y `specs/001-heat-map/spec.md`.
-**Estado:** propuesto. No se escribe código de implementación hasta aprobar este plan.
+**Estado:** implementado (T1–T26 de `tasks.md`).
 
 ## 1. Restricciones y enfoque
 

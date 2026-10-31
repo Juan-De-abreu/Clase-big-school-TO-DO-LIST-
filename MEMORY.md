@@ -1,32 +1,38 @@
 # MEMORY.md - Diario de Estudio
 
-Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
+Memoria del proyecto entre sesiones. Máximo ~60 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-- v1 funcionando: registrar sesiones (fecha, tema, minutos), racha actual, **mejor racha histórica** y lista de sesiones.
-- Datos en localStorage.
-- **Diseño "Fichas de Estudio"**: Papel/tinta/subrayador. Syne/DM Sans/JetBrains Mono. Hero asimétrico (racha grande + underline animado). Stats grid: barra progreso semanal (meta 10h) + contador mensual. Form + lista con delete.
-- **Eliminado**: glassmorphism, purple palette, blobs, emojis (🔥🏆📝), personaje SVG animado, fade-in-up genérico.
-- **Spec 001 (mapa de calor)**: redactada y revisada por QA; decisiones cerradas. Plan técnico en `specs/001-heat-map/plan.md`; pendiente implementación.
+- App funcionando: registrar sesiones, racha actual, mejor racha, progreso semanal, días del mes, lista con borrado y **mapa de calor de constancia**.
+- **Spec 001 completada**: T1–T26. `logic.js` puro + `app.js` de interfaz; 30 tests en verde con `node --test`.
+- Verificación de navegador con Edge headless vía CDP: 57 comprobaciones funcionales + 13 extra (rangos, filtro, teclado, touch, responsive, oscuro, reduced motion, 52 semanas).
+- Datos en localStorage; el formato de sesión no cambió.
+- **Diseño "Fichas de Estudio"**: papel/tinta/subrayador. Syne/DM Sans/JetBrains Mono. Hero asimétrico. Stats semanal y mensual. Sin glassmorphism, blobs, emojis ni animaciones idle.
 
 ## Decisiones (y por qué)
 - Sin backend ni dependencias: cualquiera debe poder abrirlo con doble clic.
 - Fecha editable en el formulario: permite registrar días pasados y ver la racha crecer.
-- **Mejor racha on-demand**: Se recalcula siempre desde localStorage (no campo extra). O(n) sobre fechas únicas.
-- **Un solo acento (subrayador amarillo)**: Decisión deliberada — el amarillo es "subrayar lo importante", coherente con estudiar. Nada de purple gradients decorativos.
-- **Tipografía Syne para números**: Técnica, distintiva, con personalidad. No Inter por defecto.
-- **Layout asimétrico hero**: Número a la izquierda (lo que importa), stats a la derecha. No todo centrado.
-- **Motion solo en acción**: Slide-in al guardar, barra progreso al cargar. Sin idle animations (float, blink, pulse).
-- **Semana lunes-domingo / Mes 1–último día**: Zona local, on-demand.
-- **Delete en lista**: Event delegation, UX directa.
-- **Heat map (spec 001)**: escala log 0–5 con referencia fija 480 min/día (consistente entre rangos, resistente a outliers); 5 presets; filtro por día; touch con doble tap; teclado con roving tabindex.
-- **Arquitectura 001**: `logic.js` puro con exportación dual navegador/Node + `app.js` para UI; tests con `node --test`; sin build ni dependencias.
+- **Mejor racha on-demand**: se recalcula desde localStorage (no campo extra), O(n) sobre fechas únicas.
+- **Un solo acento (subrayador amarillo)**: el amarillo es "subrayar lo importante"; nada de gradients decorativos.
+- **Semana lunes-domingo / Mes 1–último día**: zona local, on-demand.
+- **Heat map**: escala log 0–5 con referencia fija 480 min/día (consistente entre rangos y resistente a outliers); 5 presets; filtro por día; touch con doble tap; teclado con roving tabindex.
+- **Arquitectura**: `logic.js` con exportación dual navegador/Node + `app.js` para UI; tests con `node --test`; sin build.
+- **Persistencia del rango**: `study-diary-heatmap-range`; valor inválido cae en `12w` sin tocar sesiones. El filtro es estado de UI en memoria.
+- **Cuadrícula semántica**: tabla de 7 filas × N columnas, etiquetas de día fuera del scroll; relleno `null` no interactivo.
+- **Un tooltip fijo** en vez de uno por celda: menos DOM y sin recortes por scroll.
+- **Scroll al final** solo al cargar o cambiar de rango; al repintar por datos se conserva la posición.
 
 ## Aprendizajes y errores a evitar
-- Glassmorphism/purple gradients = default AI look, no "estudio".
-- Emoji icons = genérico, no material.
-- Múltiples idle animations = ruido, no señal.
-- Todo centrado = pasivo, no jerárquico.
+- Nunca `toISOString()` ni `new Date("AAAA-MM-DD")`: usar componentes locales y `dayNumber()`.
+- El DOM de la cuadrícula está ordenado por filas (lunes...domingo), no por fecha; para mínimos/máximos hay que reducir fechas, no usar el primer/último nodo.
+- `Math.max` sobre claves `AAAA-MM-DD` devuelve `NaN`; comparar como texto o reducir.
+- Módulos ES rompen `file://`; `logic.js` debe seguir siendo script clásico.
+- Glassmorphism/purple gradients y emojis = look genérico, no "estudio".
+- Corregido bug preexistente: el botón "Guardar sesión" tenía texto y fondo del mismo color; ahora usa `var(--paper)` sobre `var(--ink)`.
+
+## Entorno
+- No hay Chrome instalado; la verificación automatizada de navegador se hizo con Edge headless + CDP.
+- No hay `package.json` ni `node_modules`.
 
 ## Próximos pasos
-- Implementar `specs/001-heat-map/plan.md`: tests primero, luego `logic.js`, `app.js`, HTML y CSS.
+- Sin pendientes de la spec 001. Mantener `node --test` en verde y actualizar la spec antes de añadir funciones nuevas.

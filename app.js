@@ -1,4 +1,19 @@
+'use strict';
+
 const STORAGE_KEY = 'study-diary-sessions';
+const RANGE_STORAGE_KEY = 'study-diary-heatmap-range';
+const WEEKLY_GOAL_MINUTES = 600; // 10h = meta semanal
+const WEEKDAY_LABELS = [
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+  'domingo'
+];
+
+const logic = window.StudyLogic;
 
 const dateInput = document.getElementById('dateInput');
 const topicInput = document.getElementById('topicInput');
@@ -13,209 +28,127 @@ const weeklyMinutes = document.getElementById('weeklyMinutes');
 const weeklyHours = document.getElementById('weeklyHours');
 const weeklyProgress = document.getElementById('weeklyProgress');
 const monthlyValue = document.getElementById('monthlyValue');
+const heatmapGrid = document.getElementById('heatmapGrid');
+const heatmapScroll = document.getElementById('heatmapScroll');
+const heatmapTooltip = document.getElementById('heatmapTooltip');
+const clearFilterBtn = document.getElementById('clearFilterBtn');
+const sessionsTitle = document.getElementById('sessionsTitle');
+const rangeButtons = Array.from(document.querySelectorAll('.heatmap-range-btn'));
 
-const WEEKLY_GOAL_MINUTES = 600; // 10h = meta semanal
+let activePreset = readStoredPreset();
+let activeFilterDate = null;
+let heatmapData = null;
+let focusedCell = null;
+let lastPointerType = 'mouse';
+let lastTapDate = null;
+let suppressScrollHide = false;
 
 function getTodayLocal() {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-function formatDateForInput(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function readStoredPreset() {
+  try {
+    return logic.normalizeHeatmapPreset(localStorage.getItem(RANGE_STORAGE_KEY));
+  } catch {
+    return logic.DEFAULT_HEATMAP_PRESET;
+  }
 }
 
-function parseLocalDate(dateString) {
-  const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day);
-}
-
-function formatDateForDisplay(date) {
-  return date.toLocaleDateString('es-ES', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short'
-  });
+function saveStoredPreset(preset) {
+  try {
+    localStorage.setItem(RANGE_STORAGE_KEY, preset);
+  } catch {
+    // La preferencia es opcional: si no se puede guardar, se mantiene en memoria.
+  }
 }
 
 function loadSessions() {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) return [];
   try {
-    return JSON.parse(data);
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
 function saveSessions(sessions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-}
-
-function getUniqueSessionDates(sessions) {
-  const dates = new Set();
-  sessions.forEach(session => {
-    const date = parseLocalDate(session.date);
-    dates.add(date.getTime());
-  });
-  return Array.from(dates).map(ts => new Date(ts)).sort((a, b) => b - a);
-}
-
-function calculateStreak(sessions) {
-  const today = getTodayLocal();
-  const sessionDates = getUniqueSessionDates(sessions);
-
-  if (sessionDates.length === 0) return 0;
-
-  const todayHasSession = sessionDates.some(d => d.getTime() === today.getTime());
-
-  let streak = 0;
-  let checkDate = today;
-
-  if (!todayHasSession) {
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayHasSession = sessionDates.some(d => d.getTime() === yesterday.getTime());
-    if (!yesterdayHasSession) return 0;
-    checkDate = yesterday;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  } catch {
+    // Si no se puede guardar, la app sigue funcionando sin persistir.
   }
-
-  while (true) {
-    const hasSession = sessionDates.some(d => d.getTime() === checkDate.getTime());
-    if (!hasSession) break;
-    streak++;
-    checkDate.setDate(checkDate.getDate() - 1);
-  }
-
-  return streak;
 }
 
-function calculateBestStreak(sessions) {
-  const dates = getUniqueSessionDates(sessions);
-  if (dates.length === 0) return 0;
-
-  let best = 1;
-  let current = 1;
-
-  for (let i = 1; i < dates.length; i++) {
-    const diff = (dates[i - 1].getTime() - dates[i].getTime()) / (1000 * 60 * 60 * 24);
-    if (diff === 1) {
-      current++;
-      if (current > best) best = current;
-    } else {
-      current = 1;
-    }
-  }
-  return best;
-}
-
-function getWeekRange() {
-  const today = getTodayLocal();
-  const day = today.getDay(); // 0=dom, 1=lun...
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { monday, sunday };
-}
-
-function calculateWeeklyMinutes(sessions) {
-  const { monday, sunday } = getWeekRange();
-  return sessions
-    .filter(s => {
-      const d = parseLocalDate(s.date);
-      return d >= monday && d <= sunday;
-    })
-    .reduce((sum, s) => sum + s.minutes, 0);
-}
-
-function getMonthRange() {
-  const today = getTodayLocal();
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-  const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  return { firstDay, lastDay };
-}
-
-function calculateMonthlyStudyDays(sessions) {
-  const { firstDay, lastDay } = getMonthRange();
-  const uniqueDates = new Set();
-  
-  sessions.forEach(s => {
-    const d = parseLocalDate(s.date);
-    if (d >= firstDay && d <= lastDay) {
-      uniqueDates.add(d.getTime());
-    }
-  });
-  return uniqueDates.size;
-}
-
-function formatHoursMinutes(totalMinutes) {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes} min`;
-  if (minutes === 0) return `${hours}h`;
-  return `${hours}h ${minutes}min`;
-}
-
-function renderWeekly(sessions) {
-  const minutes = calculateWeeklyMinutes(sessions);
+function renderWeekly(sessions, today) {
+  const minutes = logic.calculateWeeklyMinutes(sessions, today);
   const pct = Math.min((minutes / WEEKLY_GOAL_MINUTES) * 100, 100);
-  
+
   weeklyMinutes.textContent = `${minutes} min`;
-  weeklyHours.textContent = formatHoursMinutes(minutes);
+  weeklyHours.textContent = logic.formatHoursMinutes(minutes);
   weeklyHours.hidden = minutes === 0;
-  
+
   weeklyProgress.style.width = `${pct}%`;
   weeklyProgress.setAttribute('aria-valuenow', minutes);
 }
 
-function renderMonthly(sessions) {
-  const days = calculateMonthlyStudyDays(sessions);
-  monthlyValue.textContent = days;
+function renderMonthly(sessions, today) {
+  monthlyValue.textContent = logic.calculateMonthlyStudyDays(sessions, today);
 }
 
-function renderStreak(sessions) {
-  const streak = calculateStreak(sessions);
-  const bestStreak = calculateBestStreak(sessions);
-  streakValue.textContent = streak;
-  bestStreakValue.textContent = bestStreak;
+function renderStreak(sessions, today) {
+  streakValue.textContent = logic.calculateStreak(sessions, today);
+  bestStreakValue.textContent = logic.calculateBestStreak(sessions);
 }
 
 function renderSessions(sessions) {
-  sessionsList.innerHTML = '';
-  sessionCount.textContent = sessions.length;
+  const visible = activeFilterDate
+    ? logic.filterSessionsByDate(sessions, activeFilterDate)
+    : sessions;
 
-  if (sessions.length === 0) {
+  sessionsList.innerHTML = '';
+  sessionCount.textContent = visible.length;
+  clearFilterBtn.hidden = activeFilterDate === null;
+
+  if (activeFilterDate !== null) {
+    const filterDate = logic.parseLocalDate(activeFilterDate);
+    clearFilterBtn.setAttribute(
+      'aria-label',
+      `Limpiar filtro del ${logic.formatDateForAccessibleLabel(filterDate)}`
+    );
+  } else {
+    clearFilterBtn.removeAttribute('aria-label');
+  }
+
+  if (visible.length === 0) {
+    emptyMessage.textContent = sessions.length === 0
+      ? 'No hay sesiones aún. Empieza a estudiar.'
+      : 'No hay sesiones en este día.';
     emptyMessage.hidden = false;
     return;
   }
 
   emptyMessage.hidden = true;
 
-  const sorted = [...sessions].sort((a, b) => {
-    const dateA = parseLocalDate(a.date).getTime();
-    const dateB = parseLocalDate(b.date).getTime();
-    if (dateB !== dateA) return dateB - dateA;
-    return b.id - a.id;
-  });
+  const sorted = logic.sortSessionsByDateDesc(visible);
 
-  sorted.forEach(session => {
-    const date = parseLocalDate(session.date);
+  sorted.forEach((session) => {
+    const date = logic.parseLocalDate(session.date);
     const li = document.createElement('li');
     li.className = 'session-item';
     li.dataset.id = session.id;
     li.innerHTML = `
       <div class="session-info">
-        <span class="session-date">${formatDateForDisplay(date)}</span>
+        <span class="session-date">${date ? logic.formatDateForDisplay(date) : session.date}</span>
         <span class="session-topic">${escapeHtml(session.topic)}</span>
       </div>
-      <div style="display: flex; align-items: center; gap: var(--space-2);">
+      <div class="session-actions">
         <span class="session-minutes">${session.minutes} min</span>
-        <button class="session-delete" aria-label="Eliminar sesión" data-id="${session.id}">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="session-delete" aria-label="Eliminar sesión" data-id="${session.id}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             <line x1="10" y1="11" x2="10" y2="17"></line>
@@ -226,21 +159,6 @@ function renderSessions(sessions) {
     `;
     sessionsList.appendChild(li);
   });
-
-  // Event delegation for delete buttons
-  sessionsList.querySelectorAll('.session-delete').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = Number(btn.dataset.id);
-      deleteSession(id);
-    });
-  });
-}
-
-function deleteSession(id) {
-  const sessions = loadSessions().filter(s => s.id !== id);
-  saveSessions(sessions);
-  renderAll();
 }
 
 function escapeHtml(text) {
@@ -249,26 +167,256 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function renderAll() {
+function buildCellLabel(cell) {
+  const date = logic.parseLocalDate(cell.key);
+  const dateLabel = logic.formatDateForAccessibleLabel(date);
+  return cell.minutes > 0
+    ? `${dateLabel}: ${cell.minutes} minutos`
+    : `${dateLabel}: sin sesiones`;
+}
+
+function getCellElement(row, col) {
+  return heatmapGrid.querySelector(
+    `.heatmap-cell[data-row="${row}"][data-col="${col}"]`
+  );
+}
+
+function renderHeatmap({ scrollToEnd = false, restoreFocus = false } = {}) {
+  if (!heatmapData) return;
+
+  const previousScroll = heatmapScroll.scrollLeft;
+  const previousFocus = focusedCell;
+  const todayKey = logic.formatDateForInput(heatmapData.end);
+  const weeks = heatmapData.weeks;
+  const fragment = document.createDocumentFragment();
+  const tbody = document.createElement('tbody');
+
+  tbody.setAttribute('role', 'rowgroup');
+
+  for (let row = 0; row < 7; row += 1) {
+    const tr = document.createElement('tr');
+    tr.setAttribute('role', 'row');
+    tr.setAttribute('aria-rowindex', String(row + 1));
+    tr.setAttribute('aria-label', WEEKDAY_LABELS[row]);
+
+    for (let col = 0; col < weeks.length; col += 1) {
+      const cell = weeks[col][row];
+
+      if (!cell) {
+        const padding = document.createElement('td');
+        padding.className = 'heatmap-cell is-padding';
+        padding.setAttribute('role', 'presentation');
+        padding.setAttribute('aria-hidden', 'true');
+        tr.appendChild(padding);
+        continue;
+      }
+
+      const td = document.createElement('td');
+      td.className = `heatmap-cell heat-level-${cell.level}`;
+      td.dataset.row = String(row);
+      td.dataset.col = String(col);
+      td.dataset.date = cell.key;
+      td.dataset.minutes = String(cell.minutes);
+      td.setAttribute('role', 'gridcell');
+      td.setAttribute('aria-colindex', String(col + 1));
+      td.setAttribute('aria-label', buildCellLabel(cell));
+      td.setAttribute('aria-selected', activeFilterDate === cell.key ? 'true' : 'false');
+
+      if (cell.key === todayKey) {
+        td.classList.add('is-today');
+        td.dataset.today = 'true';
+      }
+
+      if (activeFilterDate === cell.key) {
+        td.classList.add('is-selected');
+      }
+
+      td.tabIndex = -1;
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+  }
+
+  fragment.appendChild(tbody);
+  heatmapGrid.replaceChildren(fragment);
+  heatmapGrid.setAttribute('aria-rowcount', '7');
+  heatmapGrid.setAttribute('aria-colcount', String(weeks.length));
+  heatmapGrid.setAttribute(
+    'aria-label',
+    `Mapa de calor de constancia, ${weeks.length} semanas`
+  );
+
+  const dataCells = heatmapGrid.querySelectorAll('.heatmap-cell[data-date]');
+  const lastCell = dataCells[dataCells.length - 1];
+  const todayCell = heatmapGrid.querySelector(`[data-date="${todayKey}"]`);
+  const focusTarget = (previousFocus && getCellElement(previousFocus.row, previousFocus.col))
+    || todayCell
+    || lastCell;
+
+  heatmapGrid
+    .querySelectorAll('.heatmap-cell[tabindex="0"]')
+    .forEach((element) => {
+      element.tabIndex = -1;
+    });
+
+  if (focusTarget) {
+    focusTarget.tabIndex = 0;
+  }
+
+  if (restoreFocus && previousFocus) {
+    const target = getCellElement(previousFocus.row, previousFocus.col);
+    if (target) {
+      target.tabIndex = 0;
+      target.focus({ preventScroll: true });
+    }
+  }
+
+  heatmapScroll.scrollLeft = scrollToEnd ? heatmapScroll.scrollWidth : previousScroll;
+}
+
+function updateRangeButtons() {
+  rangeButtons.forEach((button) => {
+    const isActive = button.dataset.preset === activePreset;
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    button.classList.toggle('is-active', isActive);
+  });
+}
+
+function renderAll({ scrollToEnd = false } = {}) {
   const sessions = loadSessions();
-  renderStreak(sessions);
-  renderWeekly(sessions);
-  renderMonthly(sessions);
+  const today = getTodayLocal();
+  const gridHadFocus = heatmapGrid.contains(document.activeElement);
+
+  renderStreak(sessions, today);
+  renderWeekly(sessions, today);
+  renderMonthly(sessions, today);
+
+  heatmapData = logic.calculateHeatmap(sessions, today, activePreset);
+  renderHeatmap({ scrollToEnd, restoreFocus: gridHadFocus });
   renderSessions(sessions);
+  updateRangeButtons();
+}
+
+function focusSessionsHeading() {
+  sessionsTitle.focus();
+}
+
+function clearFilter({ moveFocus = false } = {}) {
+  hideTooltip();
+
+  if (activeFilterDate === null) {
+    if (moveFocus) focusSessionsHeading();
+    return;
+  }
+
+  activeFilterDate = null;
+  renderAll({ scrollToEnd: false });
+
+  if (moveFocus) {
+    focusSessionsHeading();
+  }
+}
+
+function activateCell(cell) {
+  const dateKey = cell.dataset.date;
+  const minutes = Number(cell.dataset.minutes);
+
+  if (!dateKey || !Number.isFinite(minutes) || minutes <= 0) {
+    return;
+  }
+
+  focusedCell = {
+    row: Number(cell.dataset.row),
+    col: Number(cell.dataset.col)
+  };
+  activeFilterDate = dateKey;
+  renderAll({ scrollToEnd: false });
+}
+
+function updateRovingTabindex(cell) {
+  heatmapGrid
+    .querySelectorAll('.heatmap-cell[tabindex="0"]')
+    .forEach((element) => {
+      element.tabIndex = -1;
+    });
+  cell.tabIndex = 0;
+}
+
+function focusCell(row, col) {
+  const cell = getCellElement(row, col);
+  if (!cell) return;
+
+  focusedCell = { row, col };
+  updateRovingTabindex(cell);
+  cell.focus({ preventScroll: true });
+
+  suppressScrollHide = true;
+
+  if (typeof cell.scrollIntoView === 'function') {
+    cell.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  showTooltip(cell);
+  window.setTimeout(() => {
+    suppressScrollHide = false;
+  }, 150);
+}
+
+function showTooltip(cell) {
+  const date = logic.parseLocalDate(cell.dataset.date);
+  if (!date) return;
+
+  const minutes = Number(cell.dataset.minutes);
+  heatmapTooltip.textContent = `${logic.formatDateForDisplay(date)} — ${minutes} min`;
+  heatmapTooltip.hidden = false;
+
+  const rect = cell.getBoundingClientRect();
+  const tooltipRect = heatmapTooltip.getBoundingClientRect();
+  const margin = 8;
+  let top = rect.top - tooltipRect.height - margin;
+  let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+
+  if (top < margin) {
+    top = rect.bottom + margin;
+  }
+
+  top = Math.min(top, window.innerHeight - tooltipRect.height - margin);
+  left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+
+  heatmapTooltip.style.top = `${Math.max(margin, top)}px`;
+  heatmapTooltip.style.left = `${left}px`;
+}
+
+function hideTooltip() {
+  heatmapTooltip.hidden = true;
+  lastTapDate = null;
+}
+
+function deleteSession(id) {
+  const sessions = loadSessions().filter((session) => session.id !== id);
+  saveSessions(sessions);
+
+  activeFilterDate = logic.nextFilterAfterDelete(activeFilterDate, sessions);
+  focusedCell = null;
+  renderAll({ scrollToEnd: false });
+  focusSessionsHeading();
 }
 
 function generateId() {
   return Date.now() + Math.random();
 }
 
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
+form.addEventListener('submit', (event) => {
+  event.preventDefault();
 
   const date = dateInput.value;
   const topic = topicInput.value.trim();
-  const minutes = parseInt(minutesInput.value, 10);
+  const minutes = Number.parseInt(minutesInput.value, 10);
 
-  if (!date || !topic || !minutes || minutes < 1) return;
+  if (!logic.parseLocalDate(date) || !topic || !Number.isFinite(minutes) || minutes < 1) {
+    return;
+  }
 
   const sessions = loadSessions();
   sessions.push({
@@ -279,13 +427,182 @@ form.addEventListener('submit', (e) => {
   });
   saveSessions(sessions);
 
+  if (logic.shouldClearFilterAfterSave(activeFilterDate, date)) {
+    activeFilterDate = null;
+    focusedCell = null;
+  }
+
   topicInput.value = '';
   minutesInput.value = '';
-  dateInput.value = formatDateForInput(getTodayLocal());
+  dateInput.value = logic.formatDateForInput(getTodayLocal());
 
-  renderAll();
+  renderAll({ scrollToEnd: false });
   topicInput.focus();
 });
 
-dateInput.value = formatDateForInput(getTodayLocal());
-renderAll();
+sessionsList.addEventListener('click', (event) => {
+  const button = event.target instanceof Element
+    ? event.target.closest('.session-delete')
+    : null;
+
+  if (!button) return;
+
+  event.stopPropagation();
+  deleteSession(Number(button.dataset.id));
+});
+
+rangeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const preset = logic.normalizeHeatmapPreset(button.dataset.preset);
+    if (preset === activePreset) return;
+
+    activePreset = preset;
+    saveStoredPreset(preset);
+    activeFilterDate = null;
+    focusedCell = null;
+    hideTooltip();
+    renderAll({ scrollToEnd: true });
+    button.focus({ preventScroll: true });
+  });
+});
+
+clearFilterBtn.addEventListener('click', () => {
+  clearFilter({ moveFocus: true });
+});
+
+heatmapGrid.addEventListener('focusin', (event) => {
+  const cell = event.target.closest('.heatmap-cell[data-date]');
+  if (!cell) return;
+
+  focusedCell = {
+    row: Number(cell.dataset.row),
+    col: Number(cell.dataset.col)
+  };
+  updateRovingTabindex(cell);
+  showTooltip(cell);
+});
+
+heatmapGrid.addEventListener('focusout', (event) => {
+  if (event.relatedTarget instanceof Node && heatmapGrid.contains(event.relatedTarget)) {
+    return;
+  }
+  hideTooltip();
+});
+
+heatmapGrid.addEventListener('pointerover', (event) => {
+  if (event.pointerType !== 'mouse') return;
+
+  const cell = event.target.closest('.heatmap-cell[data-date]');
+  if (cell) showTooltip(cell);
+});
+
+heatmapGrid.addEventListener('pointerout', (event) => {
+  if (event.pointerType !== 'mouse') return;
+
+  const cell = event.target.closest('.heatmap-cell[data-date]');
+  if (!cell) return;
+
+  if (event.relatedTarget instanceof Node && cell.contains(event.relatedTarget)) {
+    return;
+  }
+
+  if (document.activeElement === cell) return;
+  hideTooltip();
+});
+
+heatmapGrid.addEventListener('mouseleave', () => {
+  if (!heatmapGrid.contains(document.activeElement)) {
+    hideTooltip();
+  }
+});
+
+heatmapGrid.addEventListener('click', (event) => {
+  const cell = event.target.closest('.heatmap-cell[data-date]');
+  if (!cell) return;
+
+  if (lastPointerType === 'touch') {
+    if (lastTapDate === cell.dataset.date) {
+      lastTapDate = null;
+      activateCell(cell);
+    } else {
+      lastTapDate = cell.dataset.date;
+      showTooltip(cell);
+    }
+    return;
+  }
+
+  activateCell(cell);
+});
+
+heatmapGrid.addEventListener('keydown', (event) => {
+  const cell = event.target.closest('.heatmap-cell[data-date]');
+  if (!cell) return;
+
+  const directions = {
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    ArrowLeft: 'left',
+    ArrowRight: 'right'
+  };
+
+  if (directions[event.key]) {
+    event.preventDefault();
+    const next = logic.getAdjacentHeatmapCell(
+      heatmapData.weeks,
+      Number(cell.dataset.row),
+      Number(cell.dataset.col),
+      directions[event.key]
+    );
+
+    if (next) focusCell(next.row, next.col);
+    return;
+  }
+
+  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault();
+    activateCell(cell);
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    clearFilter({ moveFocus: false });
+    hideTooltip();
+  }
+});
+
+document.addEventListener('pointerdown', (event) => {
+  lastPointerType = event.pointerType || 'mouse';
+
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target || !target.closest('.heatmap-cell[data-date]')) {
+    hideTooltip();
+  }
+}, true);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+
+  if (activeFilterDate !== null) {
+    clearFilter({ moveFocus: false });
+  }
+
+  hideTooltip();
+});
+
+heatmapScroll.addEventListener('scroll', () => {
+  if (suppressScrollHide) return;
+  hideTooltip();
+}, { passive: true });
+
+window.addEventListener('scroll', () => {
+  if (suppressScrollHide) return;
+  hideTooltip();
+}, { passive: true });
+
+window.addEventListener('resize', () => {
+  hideTooltip();
+});
+
+dateInput.value = logic.formatDateForInput(getTodayLocal());
+renderAll({ scrollToEnd: true });

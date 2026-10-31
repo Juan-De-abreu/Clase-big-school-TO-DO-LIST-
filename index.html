@@ -57,6 +57,43 @@
       </article>
     </section>
 
+    <section class="heatmap-section" aria-labelledby="heatmapTitle">
+      <header class="heatmap-header">
+        <h2 id="heatmapTitle">Constancia</h2>
+        <div class="heatmap-ranges" role="group" aria-label="Rango del mapa de calor">
+          <button type="button" class="heatmap-range-btn" data-preset="4w" aria-pressed="false">4 sem</button>
+          <button type="button" class="heatmap-range-btn" data-preset="12w" aria-pressed="false">12 sem</button>
+          <button type="button" class="heatmap-range-btn" data-preset="26w" aria-pressed="false">26 sem</button>
+          <button type="button" class="heatmap-range-btn" data-preset="52w" aria-pressed="false">52 sem</button>
+          <button type="button" class="heatmap-range-btn" data-preset="year" aria-pressed="false">Año</button>
+        </div>
+      </header>
+      <div class="heatmap-body">
+        <div class="heatmap-weekdays" aria-hidden="true">
+          <span>lun</span>
+          <span></span>
+          <span>mié</span>
+          <span></span>
+          <span>vie</span>
+          <span></span>
+          <span></span>
+        </div>
+        <div class="heatmap-scroll" id="heatmapScroll">
+          <table class="heatmap-grid" id="heatmapGrid" role="grid" aria-label="Mapa de calor de constancia"></table>
+        </div>
+      </div>
+      <div class="heatmap-legend" role="note" aria-label="Intensidad de estudio: de 0 minutos a 8 horas o más">
+        <span class="heatmap-legend-label">0 min</span>
+        <span class="heatmap-swatch heat-level-0" aria-hidden="true"></span>
+        <span class="heatmap-swatch heat-level-1" aria-hidden="true"></span>
+        <span class="heatmap-swatch heat-level-2" aria-hidden="true"></span>
+        <span class="heatmap-swatch heat-level-3" aria-hidden="true"></span>
+        <span class="heatmap-swatch heat-level-4" aria-hidden="true"></span>
+        <span class="heatmap-swatch heat-level-5" aria-hidden="true"></span>
+        <span class="heatmap-legend-label">8 h+</span>
+      </div>
+    </section>
+
     <section class="form-section">
       <header class="section-header">
         <h2>Nueva sesión</h2>
@@ -82,14 +119,20 @@
 
     <section class="sessions-section">
       <header class="section-header">
-        <h2>Sesiones</h2>
-        <span class="session-count" id="sessionCount">0</span>
+        <div class="sessions-heading">
+          <h2 id="sessionsTitle" tabindex="-1">Sesiones</h2>
+          <span class="session-count" id="sessionCount">0</span>
+          <button type="button" class="btn-clear-filter" id="clearFilterBtn" hidden>Limpiar filtro</button>
+        </div>
       </header>
       <ul id="sessionsList" class="sessions-list"></ul>
       <p id="emptyMessage" class="empty-message" hidden>No hay sesiones aún. Empieza a estudiar.</p>
     </section>
   </main>
 
+  <div id="heatmapTooltip" class="heatmap-tooltip" role="tooltip" hidden></div>
+
+  <script src="logic.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
